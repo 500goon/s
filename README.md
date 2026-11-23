@@ -1,7 +1,4 @@
 
-
-
-
 local NAME = "rndm.lua"
 
 local math_floor, math_ceil = math.floor, math.ceil
@@ -1652,8 +1649,8 @@ events.on_tick(function(tick_count)
     local wep = safe_get_weapon(); local wep_name = wep and string.lower(tostring(wep.name)) or ""
     local is_deagle = wep_name:find("deagle") or wep_name:find("desert"); local is_scout = wep_name:find("ssg") or wep_name:find("scout")
     local lp = entity.get_local_player(); local lp_info = lp and entity.get_info(lp)
-    local is_lp_air = lp_info and (lp_info.is_in_air or (lp_info.velocity and math.abs(lp_info.velocity.Y) > 2))
-    local is_lp_moving = (lp_info and lp_info.speed or 0) > 1.5
+    local is_lp_air = not not (lp_info and (lp_info.is_in_air or (lp_info.velocity and math.abs(lp_info.velocity.Y) > 2)))
+    local is_lp_moving = ((lp_info and lp_info.speed) or 0) > 1.5
 
     if not is_scout and not is_deagle then
         pcall(function() rage.override_hitboxes({ "head", "chest", "pelvis" }) end)
@@ -1711,7 +1708,9 @@ events.on_tick(function(tick_count)
                 local cands, mag, aa_off, is_freestanding = candidate_list(s, target_info, is_fd, is_spin, anim, tgt)
                 s.is_freestanding = is_freestanding; maybe_reset(s, mag)
                 
-                if aa_off then offset = 0; s.aa_off = true
+                if aa_off then
+                    offset = 0
+                    s.aa_off = true
                 else
                     s.aa_off = false
                     if s.is_moving then offset = 0
@@ -1720,8 +1719,9 @@ events.on_tick(function(tick_count)
                     else
                         offset = lby_break_offset(s, target_info, now) or twist_offset(target_info) or brute_offset(s, cands)
                     end
-                    s.cur = offset
                 end
+                -- Always publish the value selected this tick; don't leave a stale yaw override behind.
+                s.cur = offset
             end
             
             if s.last_sent_yaw ~= true then plist.set(tgt, "Force body yaw", true); s.last_sent_yaw = true end
@@ -1749,7 +1749,11 @@ events.on_tick(function(tick_count)
         local r = math.floor(dsy_jit_range:get() / 2)
         local opts = {-r, 0, r}; local c = {}
         for _, x in ipairs(opts) do if x ~= S.jit_step then c[#c + 1] = x end end
-        S.jit_step = c[math.random(1, #c)]
+        if #c > 0 then
+            S.jit_step = c[math.random(1, #c)]
+        else
+            S.jit_step = 0
+        end
     else
         if dsy_jit_speed then
             S.jit_tick = S.jit_tick + 1
@@ -2629,9 +2633,3 @@ client.set_event_callback("shutdown", function()
     pcall(function() aa.reset() end)
 end)
 end) -- end delayed Vortex initialization (keeps vtab/cfg in scope)
-
-
-
-
-
-
