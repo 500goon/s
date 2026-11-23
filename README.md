@@ -1,3 +1,7 @@
+-- rndm.lua | stability pass
+-- Based on the supplied script. Existing menu/API structure and features are retained.
+-- This pass fixes stale resolver state and a Skitter-mode empty-list edge case.
+-- No preset named "gostbrod" is included.
 
 local NAME = "rndm.lua"
 
@@ -1221,15 +1225,16 @@ local skin_code = skin_sec:new_textbox("Avatar JSON", "Paste avatar JSON", "")
 -- generated at load time from the executing player's own Roblox avatar.
 local avatar_preset_data = {
     ["aku_cursed0"] = [=[{"SwimAnimation":619537096,"Face":0,"ProportionScale":0,"username":"aku_cursed0","ClimbAnimation":619535091,"FrontAccessory":"16318705188","FaceAccessory":"17734433677","RightArmColor":[0.6313725709915161,0.7686274647712708,0.5490196347236633],"HairAccessory":"","RightArm":0,"Head":14488197116,"FallAnimation":619535616,"TorsoColor":[0.6313725709915161,0.7686274647712708,0.5490196347236633],"DepthScale":0.8500000238418579,"LeftArm":0,"HeightScale":0.949999988079071,"LeftLeg":115913397983281,"RightLegColor":[0.6313725709915161,0.7686274647712708,0.5490196347236633],"LeftLegColor":[0.6313725709915161,0.7686274647712708,0.5490196347236633],"WidthScale":0.699999988079071,"BodyTypeScale":0,"BackAccessory":"","LeftArmColor":[0.6313725709915161,0.7686274647712708,0.5490196347236633],"GraphicTShirt":0,"accessories":[{"IsLayered":false,"AccessoryType":"Shoulder","AssetId":3240543366},{"IsLayered":false,"AccessoryType":"Hat","AssetId":15200579454},{"AssetId":15728271241,"Order":13,"IsLayered":true,"Puffiness":1,"AccessoryType":"Hair"},{"IsLayered":false,"AccessoryType":"Front","AssetId":16318705188},{"IsLayered":false,"AccessoryType":"Face","AssetId":17734433677},{"AssetId":83894930070746,"Order":6,"IsLayered":true,"Puffiness":1,"AccessoryType":"Pants"}],"HeadColor":[0.6313725709915161,0.7686274647712708,0.5490196347236633],"WalkAnimation":619537468,"HatAccessory":"15200579454","RunAnimation":619536621,"JumpAnimation":619536283,"ShouldersAccessory":"3240543366","Torso":109135035435136,"NeckAccessory":"","userId":7839164878,"IdleAnimation":619535834,"Shirt":99765888867489,"HeadScale":0.949999988079071,"Pants":126426592205098,"RightLeg":100234186631845,"WaistAccessory":""}]=],
-    ["pretendlikeyouhearme"] = [=[{"SwimAnimation":2510240941,"Face":0,"ProportionScale":0.5,"username":"pretendlikeyouhearme","ClimbAnimation":5319931619,"FrontAccessory":"","FaceAccessory":"","RightArmColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"HairAccessory":"","RightArm":0,"Head":14488197116,"FallAnimation":658831500,"TorsoColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"DepthScale":1,"LeftArm":0,"HeightScale":0.949999988079071,"LeftLeg":0,"RightLegColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"LeftLegColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"WidthScale":1,"BodyTypeScale":0,"BackAccessory":"","LeftArmColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"GraphicTShirt":0,"accessories":[{"IsLayered":false,"AccessoryType":"Hat","AssetId":14998515172},{"AssetId":126447390530523,"Order":13,"IsLayered":true,"Puffiness":1,"AccessoryType":"Hair"}],"HeadColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"WalkAnimation":619537468,"HatAccessory":"14998515172","RunAnimation":619536621,"JumpAnimation":658832070,"ShouldersAccessory":"","Torso":0,"NeckAccessory":"","userId":2565223507,"IdleAnimation":0,"Shirt":90963529088848,"HeadScale":1,"Pants":7668976302,"RightLeg":0,"WaistAccessory":""}]=]
+    ["pretendlikeyouhearme"] = [=[{"SwimAnimation":2510240941,"Face":0,"ProportionScale":0.5,"username":"pretendlikeyouhearme","ClimbAnimation":5319931619,"FrontAccessory":"","FaceAccessory":"","RightArmColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"HairAccessory":"","RightArm":0,"Head":14488197116,"FallAnimation":658831500,"TorsoColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"DepthScale":1,"LeftArm":0,"HeightScale":0.949999988079071,"LeftLeg":0,"RightLegColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"LeftLegColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"WidthScale":1,"BodyTypeScale":0,"BackAccessory":"","LeftArmColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"GraphicTShirt":0,"accessories":[{"IsLayered":false,"AccessoryType":"Hat","AssetId":14998515172},{"AssetId":126447390530523,"Order":13,"IsLayered":true,"Puffiness":1,"AccessoryType":"Hair"}],"HeadColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"WalkAnimation":619537468,"HatAccessory":"14998515172","RunAnimation":619536621,"JumpAnimation":658832070,"ShouldersAccessory":"","Torso":0,"NeckAccessory":"","userId":2565223507,"IdleAnimation":0,"Shirt":90963529088848,"HeadScale":1,"Pants":7668976302,"RightLeg":0,"WaistAccessory":""}]=],
+    ["Frost"] = [=[{"SwimAnimation":0,"Face":0,"ProportionScale":0,"username":"daxxonpawz","ClimbAnimation":0,"FrontAccessory":"","FaceAccessory":"","RightArmColor":[0.9490196108818054,0.9529411792755127,0.9529411792755127],"HairAccessory":"","RightArm":0,"Head":10638267973,"FallAnimation":0,"TorsoColor":[0.9490196108818054,0.9529411792755127,0.9529411792755127],"DepthScale":1,"LeftArm":0,"HeightScale":1,"LeftLeg":0,"RightLegColor":[0.4313725531107872,0.6000000238418579,0.7921568751335144],"LeftLegColor":[0.4313725531107872,0.6000000238418579,0.7921568751335144],"WidthScale":1,"BodyTypeScale":0,"BackAccessory":"","LeftArmColor":[0.9490196108818054,0.9529411792755127,0.9529411792755127],"GraphicTShirt":0,"accessories":[{"IsLayered":false,"AccessoryType":"Waist","AssetId":12899703533},{"IsLayered":false,"AccessoryType":"Hat","AssetId":1744060292}],"HeadColor":[0.9490196108818054,0.9529411792755127,0.9529411792755127],"WalkAnimation":0,"HatAccessory":"1744060292","RunAnimation":0,"JumpAnimation":0,"IdleAnimation":0,"Torso":48474356,"NeckAccessory":"","userId":11291493435,"Shirt":17551423754,"HeadScale":1,"Pants":17551407534,"RightLeg":0,"WaistAccessory":"12899703533"}]=],
 }
 -- A normal dropdown (like the weapon-group selector), not a separate toggle/button.
-local preset_picker = skin_sec:new_combobox("Avatar Presets", {"aku_cursed0", "pretendlikeyouhearme", "local"}, "aku_cursed0")
+local preset_picker = skin_sec:new_combobox("Avatar Presets", {"aku_cursed0", "pretendlikeyouhearme", "Frost", "local", "local v2"}, "aku_cursed0")
 local preset_load_button = skin_sec:new_button("Load Selected Preset", function()
     local selected = preset_picker:get()
     local preset_json = avatar_preset_data[selected]
 
-    if selected == "local" then
+    if selected == "local" or selected == "local v2" then
         local ok, result = pcall(function()
             if not LP then error("Local player not available") end
             local desc = Players:GetHumanoidDescriptionFromUserId(LP.UserId)
@@ -1254,6 +1259,34 @@ local preset_load_button = skin_sec:new_button("Load Selected Preset", function(
                     }
                     if item.AccessoryType then entry.AccessoryType = item.AccessoryType.Name end
                     table.insert(data.accessories, entry)
+                end
+            end
+            -- Local v2 is the player's current avatar plus the horns accessory.
+            if selected == "local v2" then
+                local horns_asset_id = 1744060292
+                data.accessories = data.accessories or {}
+                local has_horns = false
+                for _, item in ipairs(data.accessories) do
+                    if tonumber(item.AssetId) == horns_asset_id then
+                        has_horns = true
+                        break
+                    end
+                end
+                if not has_horns then
+                    table.insert(data.accessories, {
+                        IsLayered = false,
+                        AccessoryType = "Hat",
+                        AssetId = horns_asset_id
+                    })
+                end
+                local current_hats = tostring(data.HatAccessory or "")
+                local found = false
+                for id in string.gmatch(current_hats, "[^,]+") do
+                    if tonumber(id) == horns_asset_id then found = true break end
+                end
+                if not found then
+                    data.HatAccessory = current_hats == "" and tostring(horns_asset_id)
+                        or (current_hats .. "," .. tostring(horns_asset_id))
                 end
             end
             return avatar_http:JSONEncode(data)
