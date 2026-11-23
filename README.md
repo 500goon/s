@@ -1589,6 +1589,210 @@ client.set_event_callback("shutdown", function()
     clantag.reset()
 end)
 
+-- ================= PEEK ADVISOR =================
+local peek_sec   = misc_tab:new_section("Peek Advisor", "Left")
+local peek_on    = peek_sec:new_toggle("Enable Peek Advisor", true)
+local peek_y     = peek_sec:new_slider("Offset Y", 40, 200, 55, 0, "px")
+local peek_tsize = peek_sec:new_slider("Text size", 10, 20, 13, 0, "px")
+local peek_extra = peek_sec:new_slider("Safety margin", 0, 8, 2, 0, "t")
+
+local peek_intel, peek_n, peek_nearest = {}, 0, nil
+local function pk_wrap(a) return ((a + 180) % 360) - 180 end
+
+local function pk_new_rec()
+    return { side = 0, last_flip = 0, flips = 0, ints = {},
+             def_count = 0, last_def = 0, last_yaw = nil,
+             des_now = 0, ema_des = 0, aimerr = 180 }
+end
+
+local function pk_update(rec, e, mypos, now)
+    local okp, pos = pcall(entity.get_player_position, e)
+    if not okp or not pos then return end
+    local oka, pitch, yaw = pcall(entity.get_player_angles_deg, e)
+    local okn, anim        = pcall(entity.get_anim_state, e)
+
+    if okn and anim and anim.eye_angles_y and anim.goal_feet_yaw then
+        local des = pk_wrap(anim.goal_feet_yaw - anim.eye_angles_y)
+        rec.des_now = des
+        rec.ema_des = rec.ema_des * 0.97 + math.abs(des) * 0.03
+        local side = (des > 10 and 1) or (des < -10 and -1) or 0
+        if side ~= 0 then
+            if rec.side == 0 then
+                rec.last_flip = now
+            elseif side ~= rec.side then
+                rec.ints[#rec.ints + 1] = now - rec.last_flip
+                if #rec.ints > 12 then table.remove(rec.ints, 1) end
+                rec.flips    = rec.flips + 1
+                rec.last_flip = now
+            end
+            rec.side = side
+        end
+    end
+
+    if oka and yaw and rec.last_yaw and math.abs(pk_wrap(yaw - rec.last_yaw)) > 120 then
+        rec.def_count = rec.def_count + 1
+        rec.last_def  = now
+    end
+    if oka then rec.last_yaw = yaw end
+
+    if oka and yaw then
+        local to_me = mypos - pos
+        local flat  = Vector3.new(to_me.X, 0, to_me.Z)
+        if flat.Magnitude > 0.01 then
+            local d   = math.rad(yaw)
+            local dir = Vector3.new(math.sin(d), 0, math.cos(d))
+            local c   = math.clamp(dir:Dot(flat.Unit), -1, 1)
+            rec.aimerr = math.deg(math.acos(c))
+        end
+    end
+end
+
+local function pk_pattern(rec)
+    local n = #rec.ints
+    if n < 4 then return "learning", nil end
+    local sum = 0
+    for i = 1, n do sum = sum + rec.ints[i] end
+    local mean = sum / n
+    local var  = 0
+    for i = 1, n do var = var + (rec.ints[i] - mean) ^ 2 end
+    local std  = math.sqrt(var / n)
+    local label
+    if     mean <= 2.3 then label = "jitter"
+    elseif std  <= 1.2 then label = "fixed " .. math.floor(mean + 0.5) .. "t"
+    else                     label = "variable" end
+    local next_in = math.max(0, math.floor(mean - (peek_n - rec.last_flip) + 0.5))
+    return label, next_in
+end
+
+events.on_tick(function()
+    peek_n = peek_n + 1
+    local ok, lp = pcall(entity.get_local_player)
+    if not ok or not lp then peek_nearest = nil; return end
+    local okp, mypos = pcall(entity.get_player_position, lp)
+    if not okp or not mypos then peek_nearest = nil; return end
+    local ok_en, enemies = pcall(entity.get_enemies)
+    if not ok_en or type(enemies) ~= "table" then peek_nearest = nil; return end
+
+    local best
+    for _, e in ipairs(enemies) do
+        local aok, a = pcall(entity.is_alive, e)
+        if aok and a then
+            local pok, p = pcall(entity.get_player_position, e)
+            if pok and p then
+                local d = (p - mypos).Magnitude
+                if not best or d < best.d then best = { e = e, d = d } end
+            end
+        end
+    end
+
+    if best then
+        local rec = peek_intel[best.e]
+        if not rec then rec = pk_new_rec(); peek_intel[best.e] = rec end
+        pk_update(rec, best.e, mypos, peek_n)
+        peek_nearest = rec
+    else
+        peek_nearest = nil
+    end
+end)
+
+-- Ezyk-style scoring: optional view-angle check is kept off by default,
+-- matching the reference script's default. Existing GUI controls are unchanged.
+local PK_VIEW_CHECK = false
+local PK_LOOK_AWAY_ANGLE = 25
+local PK_DEFENSIVE_COOLDOWN = 64
+
+local function pk_verdict()
+    local rec = peek_nearest
+    if not rec then return "NO TARGET", C_MUTED end
+
+    local label, next_in = pk_pattern(rec)
+    local score = 0
+    local reasons = {}
+
+    -- 1) View-angle check (disabled by default, as in Ezyk).
+    if PK_VIEW_CHECK then
+        if rec.aimerr > PK_LOOK_AWAY_ANGLE then
+            score = score + 1
+            reasons[#reasons + 1] = "not looking at you"
+        else
+            score = score - 1
+            reasons[#reasons + 1] = "aiming at you"
+        end
+    end
+
+    -- 2) Recent defensive burst: wait for the cooldown to expire.
+    local since_def = peek_n - rec.last_def
+    if rec.def_count > 0 and since_def < PK_DEFENSIVE_COOLDOWN then
+        score = score - 1
+        reasons[#reasons + 1] = "defensive " .. since_def .. "t ago"
+    end
+
+    -- 3) Check whether the current side is expected to remain stable
+    -- long enough for latency plus the configured safety margin.
+    local ok_lat, lat = pcall(client.latency)
+    local ok_ti, ti = pcall(globals.tickinterval)
+    local lat_ticks = (ok_lat and type(lat) == "number" and ok_ti and type(ti) == "number" and ti > 0)
+        and (lat / ti) or 4
+    local need = lat_ticks + peek_extra:get()
+
+    if label == "jitter" then
+        score = score - 1
+        reasons[#reasons + 1] = "per-tick jitter (no stable window)"
+    elseif next_in then
+        if next_in > need then
+            score = score + 1
+            reasons[#reasons + 1] = string.format("side stable ~%dt (need %.0f)", next_in, need)
+        else
+            score = score - 1
+            reasons[#reasons + 1] = string.format("flip in ~%dt (need %.0f)", next_in, need)
+        end
+    else
+        reasons[#reasons + 1] = "pattern still learning"
+    end
+
+    -- Ezyk's default threshold: GOOD with one positive factor, OK at zero.
+    if score >= (PK_VIEW_CHECK and 2 or 1) then
+        return "PEEK: GOOD", C_GOOD
+    elseif score >= 0 then
+        return "PEEK: OK", C_FAIR
+    end
+    return "PEEK: WAIT", C_BAD
+end
+
+local peek_gui = new("ScreenGui", {
+    Name = "RndmPeekAdv", ResetOnSpawn = false, IgnoreGuiInset = true,
+    DisplayOrder = 49, ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+})
+mount(peek_gui)
+
+local peek_label = new("TextLabel", {
+    AnchorPoint            = Vector2.new(0.5, 0),
+    Position               = UDim2.new(0.5, 0, 0.5, peek_y:get()),
+    Size                   = UDim2.fromOffset(400, 18),
+    BackgroundTransparency = 1,
+    Font                   = FONT_BOLD,
+    TextSize               = peek_tsize:get(),
+    Text                   = "",
+    TextColor3             = C_MUTED,
+    TextStrokeTransparency = 0.6,
+    TextXAlignment         = Enum.TextXAlignment.Center,
+    Visible                = false,
+}, peek_gui)
+
+client.set_event_callback("paint", function()
+    if not peek_on:get() then peek_label.Visible = false; return end
+    local word, col = pk_verdict()
+    peek_label.Text       = word
+    peek_label.TextColor3 = col
+    peek_label.TextSize   = peek_tsize:get()
+    peek_label.Position   = UDim2.new(0.5, 0, 0.5, peek_y:get())
+    peek_label.Visible    = true
+end)
+
+client.set_event_callback("shutdown", function()
+    if peek_gui then pcall(function() peek_gui:Destroy() end) end
+end)
+
 -- ================= MERGED EVENTS =================
 client.set_event_callback("aim_fire", function(e)
     resolver_stats.shots_fired = resolver_stats.shots_fired + 1
@@ -2642,3 +2846,9 @@ client.set_event_callback("shutdown", function()
     pcall(function() aa.reset() end)
 end)
 end) -- end delayed Vortex initialization (keeps vtab/cfg in scope)
+
+
+
+
+
+
