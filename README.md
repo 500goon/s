@@ -1563,7 +1563,7 @@ end)
 
 -- ================= RANDOM CLANTAG =================
 local clantag_sec = misc_tab:new_section("Random Clantag", "Left")
-local default_text = "rndm lua"
+local default_text = "rndm lua beta "
 local text_box = clantag_sec:new_textbox("Clantag Text", "Enter text", default_text)
 local speed_slider = clantag_sec:new_slider("Cooldown (s)", 0.01, 0.5, 0.30, 2, "s")
 
@@ -2846,7 +2846,6 @@ client.set_event_callback("shutdown", function()
     pcall(function() aa.reset() end)
 end)
 end) -- end delayed Vortex initialization (keeps vtab/cfg in scope)
-
 
 
 
