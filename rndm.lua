@@ -2,7 +2,7 @@
 
 
 
--- meow :3 
+-- meow :3
 
 
 
@@ -1723,30 +1723,110 @@ client.set_event_callback("shutdown", function()
     skin_restore()
 end)
 
--- ================= RANDOM CLANTAG =================
+-- ================= CUSTOM CLANTAG WITH INDEPENDENT SPEEDS =================
 local clantag_sec = misc_tab:new_section("Random Clantag", "Left")
 local default_text = "rndm lua"
+local clantag_presets = {
+    ["rndm lua"] = "rndm lua",
+    ["overtonight"] = "overtonight"
+}
+local clantag_preset_picker = clantag_sec:new_combobox("Clantag Preset", {"rndm lua", "overtonight"}, "rndm lua")
 local text_box = clantag_sec:new_textbox("Clantag Text", "Enter text", default_text)
-local speed_slider = clantag_sec:new_slider("Cooldown (s)", 0.01, 0.5, 0.30, 2, "s")
+local speed_slider = clantag_sec:new_slider("Typing Speed (s)", 0.01, 0.30, 0.30, 2, "s")
+local delete_slider = clantag_sec:new_slider("Deleting Speed (s)", 0.01, 0.30, 0.15, 2, "s")
+local delay_slider = clantag_sec:new_slider("End Hold (Frames)", 1, 20, 5, 0, "f")
 
-local function apply_clantag()
-    local text = text_box:get()
+local active_clantag_text = default_text
+
+local function apply_clantag(text)
+    text = tostring(text or active_clantag_text or default_text)
     if text == "" then text = default_text end
-    clantag.set(text, "typewriter", speed_slider:get())
+    active_clantag_text = text
+
+    local frames = {}
+    local length = #text
+    local type_spd = tonumber(speed_slider:get()) or 0.30
+    local del_spd = tonumber(delete_slider:get()) or 0.15
+    local base_spd = math.max(0.01, math.min(type_spd, del_spd))
+    local type_ratio = math.max(1, math.ceil(type_spd / base_spd))
+    local del_ratio = math.max(1, math.ceil(del_spd / base_spd))
+
+    for i = 1, length do
+        local frame = text:sub(1, i)
+        for _ = 1, type_ratio do table.insert(frames, frame) end
+    end
+    for _ = 1, math.floor(tonumber(delay_slider:get()) or 5) do
+        table.insert(frames, text)
+    end
+    for i = length - 1, 1, -1 do
+        local frame = text:sub(1, i)
+        for _ = 1, del_ratio do table.insert(frames, frame) end
+    end
+    table.insert(frames, "")
+
+    local ok, err = pcall(function()
+        clantag.set_frames(frames, base_spd)
+    end)
+    if not ok then warn("[Random Clantag] Apply failed:", err) end
 end
 
-local clantag_toggle = clantag_sec:new_toggle("Enable Typewriter Clantag", true, function(value)
-    if value then apply_clantag() else clantag.reset() end
+local function get_selected_clantag_text()
+    local selected = clantag_preset_picker:get()
+    local preset_text = clantag_presets[selected]
+    if preset_text then
+        active_clantag_text = preset_text
+        pcall(function() text_box:set(preset_text) end)
+        return preset_text
+    end
+    local custom = text_box:get()
+    if custom == nil or tostring(custom) == "" then custom = default_text end
+    active_clantag_text = tostring(custom)
+    return active_clantag_text
+end
+
+local clantag_toggle = clantag_sec:new_toggle("Enable Custom Clantag", true, function(enabled)
+    if enabled then
+        apply_clantag(get_selected_clantag_text())
+    else
+        clantag.reset()
+    end
 end)
 
-text_box:set_callback(function()
-    if clantag_toggle:get() then apply_clantag() end
+text_box:set_callback(function(value)
+    if value ~= nil then active_clantag_text = tostring(value) end
 end)
-speed_slider:set_callback(function()
-    if clantag_toggle:get() then apply_clantag() end
-end)
--- Start enabled with the default cooldown applied immediately.
-if clantag_toggle:get() then apply_clantag() end
+
+-- Poll the combobox every five seconds instead of relying on its callback.
+-- Only restart the clantag when the selected preset actually changes.
+local last_clantag_selection = tostring(clantag_preset_picker:get() or "rndm lua")
+local next_clantag_check = 0
+
+local function check_clantag_selection()
+    local now = clock()
+    if now < next_clantag_check then return end
+    next_clantag_check = now + 5
+
+    local ok, selected = pcall(function()
+        return clantag_preset_picker:get()
+    end)
+    if not ok or selected == nil then return end
+
+    selected = tostring(selected)
+    if selected ~= last_clantag_selection then
+        last_clantag_selection = selected
+        local selected_text = get_selected_clantag_text()
+        if clantag_toggle:get() then
+            apply_clantag(selected_text)
+        end
+    end
+end
+
+client.set_event_callback("paint", check_clantag_selection)
+
+-- Initialize the editor and clantag from the current selection.
+get_selected_clantag_text()
+if clantag_toggle:get() then apply_clantag(active_clantag_text) end
+
 client.set_event_callback("shutdown", function()
     clantag.reset()
 end)
