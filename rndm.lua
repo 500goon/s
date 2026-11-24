@@ -7,7 +7,7 @@
 
 
 
-local NAME = "rndm.lua"
+local NAME = "rndm.lua" 
 
 local math_floor, math_ceil = math.floor, math.ceil
 local string_sub = string.sub
@@ -2514,7 +2514,7 @@ cfg.pitch_hold1 = sec_state:new_slider("Pitch Angle 1 Hold", 1, 32, 1, 0, "t")
 cfg.pitch_hold2 = sec_state:new_slider("Pitch Angle 2 Hold", 1, 32, 1, 0, "t")
 
 cfg.yaw_base = sec_state:new_combobox("Yaw Base", { "Camera", "World" }, "Camera")
-cfg.yaw_add = sec_state:new_slider("Yaw Offset", -180, 180, -90, 0, "°")
+cfg.yaw_add = sec_state:new_slider("Yaw Offset", -180, 180, -180, 0, "°")
 cfg.yaw_delay = sec_state:new_slider("Yaw Delay", 1, 32, 1, 0, "t")
 cfg.yaw_randomize = sec_state:new_slider("Yaw Delay Randomize", 0, 16, 0, 0, "t")
 cfg.yaw_hold = sec_state:new_slider("Yaw Hold Ticks", 1, 32, 1, 0, "t")
