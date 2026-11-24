@@ -2,7 +2,7 @@
 
 
 
-
+--meow :3 
 
 
 
@@ -1152,7 +1152,9 @@ local vhud_show_wep    = vhud_sec:new_toggle("Show per-weapon hit%", true)
 
 local ext_air_aa       = ext_sec:new_toggle("Air AA", true)
 local ext_low_hp_aa    = ext_sec:new_toggle("Low HP AA", true)
-local ext_sync_fs      = ext_sec:new_toggle("Sync Native Freestanding", false) 
+local ext_sync_fs      = ext_sec:new_toggle("Custom Wall Freestanding", false)
+local ext_fs_hold      = ext_sec:new_slider("Freestanding Side Hold", 2, 32, 8, 0, "t")
+local ext_fs_yaw       = ext_sec:new_slider("Freestanding Yaw Offset", 0, 90, 35, 0, "°") 
 local anti_meta_static = ext_sec:new_toggle("Anti-Meta Static (BAim Forcer)", false)
 local force_strafe     = ext_sec:new_toggle("Force Counter-Strafe", false)
 
@@ -1203,6 +1205,87 @@ local rank_sec = misc_tab:new_section("Position", "Right")
 local rank_x = rank_sec:new_slider("X Position", 0, 2000, 960, 0, "px")
 local rank_y = rank_sec:new_slider("Y Position", 0, 1500, 82, 0, "px")
 local rank_show = rank_sec:new_toggle("Show Stats", true)
+
+-- ================= BETTER VIEW =================
+-- Reapplies the selected map-geometry style every 50 seconds while enabled.
+local better_view_sec = misc_tab:new_section("Better View", "Right")
+local better_view_enabled = better_view_sec:new_toggle("Enable Better View", true)
+local better_view_transparency = better_view_sec:new_slider("Transparency", 0, 1, 0.75, 2)
+local better_view_color = better_view_sec:new_colorpicker("ForceField Color", Color3.fromHex("#5200FF"))
+
+local better_view_last_run = 0
+local function better_view_apply_style(obj, target_color, transparency)
+    if obj:IsA("BasePart") then
+        obj.Material = Enum.Material.ForceField
+        obj.Transparency = transparency
+        obj.Color = target_color
+        if obj:IsA("MeshPart") then
+            pcall(function() obj.TextureID = "" end)
+        end
+    elseif obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("SurfaceAppearance") then
+        obj:Destroy()
+    end
+end
+
+local function better_view_apply_target(target, target_color, transparency)
+    if not target then return end
+    better_view_apply_style(target, target_color, transparency)
+    for _, descendant in ipairs(target:GetDescendants()) do
+        better_view_apply_style(descendant, target_color, transparency)
+    end
+end
+
+local function better_view_refresh()
+    local map = workspace:FindFirstChild("Map")
+    if not map then return end
+    local target_color = better_view_color:get()
+    local transparency = math.clamp(better_view_transparency:get(), 0, 1)
+
+    local dust = map:FindFirstChild("DustII")
+    local geometry = dust and dust:FindFirstChild("Geometry")
+    local minecraft2 = geometry and geometry:FindFirstChild("minecraft2")
+    if minecraft2 then
+        local children = minecraft2:GetChildren()
+        local indexed = children[325]
+        better_view_apply_target(indexed and indexed:FindFirstChild("Porta B "), target_color, transparency)
+        better_view_apply_target(children[360], target_color, transparency)
+    end
+
+    local mirage = map:FindFirstChild("Mirage")
+    local mirage_geometry = mirage and mirage:FindFirstChild("Geometry")
+    if mirage_geometry then
+        local mirage_children = mirage_geometry:GetChildren()
+        better_view_apply_target(mirage_children[597], target_color, transparency)
+        better_view_apply_target(mirage_children[599], target_color, transparency)
+        better_view_apply_target(mirage_children[940], target_color, transparency)
+        better_view_apply_target(mirage_children[1108], target_color, transparency)
+        better_view_apply_target(mirage_children[1995], target_color, transparency)
+        better_view_apply_target(mirage_children[911], target_color, transparency)
+        better_view_apply_target(mirage_children[1562], target_color, transparency)
+        better_view_apply_target(mirage_children[1558], target_color, transparency)
+        better_view_apply_target(mirage_children[770], target_color, transparency)
+        better_view_apply_target(mirage_children[843], target_color, transparency)
+        better_view_apply_target(mirage_children[609], target_color, transparency)
+        local special_target = mirage_children[108]
+        -- Use the same Better View material, color, and slider transparency for all parts inside .b.
+        better_view_apply_target(special_target and special_target:FindFirstChild("b"), target_color, transparency)
+    end
+end
+
+task.spawn(function()
+    while not dead do
+        if better_view_enabled:get() then
+            local now = clock()
+            if now - better_view_last_run >= 50 then
+                better_view_last_run = now
+                pcall(better_view_refresh)
+            end
+        else
+            better_view_last_run = 0
+        end
+        task.wait(1)
+    end
+end)
 -- ================= AVATAR SKIN CHANGER =================
 -- JSON appearance codes; original avatar is re-fetched from LocalPlayer.UserId.
 local avatar_http = service("HttpService")
@@ -1219,11 +1302,13 @@ local avatar_colors = {
     "HeadColor", "TorsoColor", "LeftArmColor", "RightArmColor",
     "LeftLegColor", "RightLegColor"
 }
-local skin_sec = misc_tab:new_section("Avatar JSON", "Right")
-local skin_enabled = skin_sec:new_toggle("Enable Skin Changer", false)
+local skin_sec = misc_tab:new_section("Model Changer", "Right")
+local skin_enabled = skin_sec:new_toggle("Enable Model Changer", false)
 local headless_toggle = skin_sec:new_toggle("Headless", false)
-local skin_user_id = skin_sec:new_textbox("Export Username / UserId", "Roblox username or numeric UserId", "7839164878")
-local skin_code = skin_sec:new_textbox("Avatar JSON", "Paste avatar JSON", "")
+local skin_user_id = skin_sec:new_textbox("Custom User", "Roblox username or numeric UserId", "")
+local skin_json = ""
+local skin_code = { get = function() return skin_json end, set = function(_, value) skin_json = value end }
+local skin_cfg_box = skin_sec:new_textbox("Avatar CFG (JSON)", "Paste or edit avatar JSON here", "")
 
 -- Presets are selected from the dropdown below. The Local preset is
 -- generated at load time from the executing player's own Roblox avatar.
@@ -1234,7 +1319,7 @@ local avatar_preset_data = {
 }
 -- A normal dropdown (like the weapon-group selector), not a separate toggle/button.
 local preset_picker = skin_sec:new_combobox("Avatar Presets", {"aku_cursed0", "pretendlikeyouhearme", "Frost", "local"}, "aku_cursed0")
-local preset_load_button = skin_sec:new_button("Load Selected Preset", function()
+local function skin_load_selected_preset()
     local selected = preset_picker:get()
     local preset_json = avatar_preset_data[selected]
 
@@ -1279,9 +1364,10 @@ local preset_load_button = skin_sec:new_button("Load Selected Preset", function(
         return
     end
     skin_code:set(preset_json)
+    pcall(function() skin_cfg_box:set(preset_json) end)
     database.write("rndm_avatar_json", preset_json)
     client.log("[Skin Changer] Loaded preset: " .. tostring(selected))
-end)
+end
 
 local skin_changed = false
 local skin_hidden_parts = {}
@@ -1501,8 +1587,8 @@ local function skin_export()
     print("[Skin Changer] Avatar JSON:", result)
 end
 
-local function skin_apply()
-    if not skin_enabled:get() then return end
+local function skin_apply(force)
+    if not force and not skin_enabled:get() then return end
     skin_clear_first_person()
     local humanoid = skin_humanoid()
     if not humanoid then warn("[Skin Changer] VisualSkin Humanoid not found"); return end
@@ -1548,12 +1634,100 @@ end
 skin_enabled:set_callback(function(on)
     if on then skin_apply() else skin_restore() end
 end)
-skin_sec:new_button("Export Username / UserId to JSON", skin_export)
-skin_sec:new_button("Apply Avatar JSON", skin_apply)
-skin_sec:new_button("Load Saved JSON", function()
-    local stored = database.read("rndm_avatar_json")
-    if stored then skin_code:set(stored) else warn("[Skin Changer] No saved JSON") end
+-- Selecting a built-in preset applies it immediately; no extra load step.
+preset_picker:set_callback(function()
+    skin_load_selected_preset()
+    pcall(function() skin_enabled:set(true) end)
+    skin_apply(true)
 end)
+
+local function skin_apply_custom_user()
+    local raw = tostring(skin_user_id:get() or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if raw == "" then warn("[Model Changer] Enter a username or UserId"); return end
+    local ok, result = pcall(function()
+        local user_id = tonumber(raw)
+        if not user_id then user_id = Players:GetUserIdFromNameAsync(raw) end
+        local desc = Players:GetHumanoidDescriptionFromUserId(user_id)
+        local data = { userId = user_id, username = raw }
+        for _, key in ipairs(avatar_props) do
+            local valid, value = pcall(function() return desc[key] end)
+            if valid and value ~= nil then data[key] = value end
+        end
+        for _, key in ipairs(avatar_colors) do
+            local valid, value = pcall(function() return desc[key] end)
+            if valid and value then data[key] = { value.R, value.G, value.B } end
+        end
+        local valid, accessories = pcall(function() return desc:GetAccessories(true) end)
+        if valid and accessories then
+            data.accessories = {}
+            for _, item in ipairs(accessories) do
+                local entry = { AssetId = item.AssetId, IsLayered = item.IsLayered, Order = item.Order, Puffiness = item.Puffiness }
+                if item.AccessoryType then entry.AccessoryType = item.AccessoryType.Name end
+                table.insert(data.accessories, entry)
+            end
+        end
+        return avatar_http:JSONEncode(data)
+    end)
+    if not ok then warn("[Model Changer] Could not fetch user avatar:", result); return end
+    skin_code:set(result)
+    pcall(function() skin_cfg_box:set(result) end)
+    pcall(function() skin_enabled:set(true) end)
+    skin_apply(true)
+end
+local function skin_extract_preset_cfg()
+    skin_load_selected_preset()
+    local value = skin_code:get() or ""
+    skin_cfg_box:set(value)
+    client.log("[Model Changer] Selected preset CFG extracted to the editor")
+end
+
+local function skin_extract_user_cfg()
+    local raw = tostring(skin_user_id:get() or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if raw == "" then warn("[Model Changer] Enter a username or UserId first"); return end
+    local ok, result = pcall(function()
+        local user_id = tonumber(raw)
+        if not user_id then user_id = Players:GetUserIdFromNameAsync(raw) end
+        local desc = Players:GetHumanoidDescriptionFromUserId(user_id)
+        local data = { userId = user_id, username = raw }
+        for _, key in ipairs(avatar_props) do
+            local valid, value = pcall(function() return desc[key] end)
+            if valid and value ~= nil then data[key] = value end
+        end
+        for _, key in ipairs(avatar_colors) do
+            local valid, value = pcall(function() return desc[key] end)
+            if valid and value then data[key] = { value.R, value.G, value.B } end
+        end
+        local valid, accessories = pcall(function() return desc:GetAccessories(true) end)
+        if valid and accessories then
+            data.accessories = {}
+            for _, item in ipairs(accessories) do
+                local entry = { AssetId = item.AssetId, IsLayered = item.IsLayered,
+                    Order = item.Order, Puffiness = item.Puffiness }
+                if item.AccessoryType then entry.AccessoryType = item.AccessoryType.Name end
+                table.insert(data.accessories, entry)
+            end
+        end
+        return avatar_http:JSONEncode(data)
+    end)
+    if not ok then warn("[Model Changer] User CFG extraction failed:", result); return end
+    skin_code:set(result)
+    skin_cfg_box:set(result)
+    database.write("rndm_avatar_json", result)
+    client.log("[Model Changer] User CFG extracted to the editor")
+end
+
+local function skin_apply_cfg_editor()
+    local value = tostring(skin_cfg_box:get() or "")
+    if value == "" then warn("[Model Changer] CFG editor is empty"); return end
+    skin_code:set(value)
+    pcall(function() skin_enabled:set(true) end)
+    skin_apply(true)
+end
+
+skin_sec:new_button("Extract Preset CFG", skin_extract_preset_cfg)
+skin_sec:new_button("Extract User CFG", skin_extract_user_cfg)
+skin_sec:new_button("Apply CFG From Editor", skin_apply_cfg_editor)
+skin_sec:new_button("Apply Avatar", skin_apply_custom_user)
 client.set_event_callback("paint", skin_first_person_update)
 client.set_event_callback("paint", headless_update)
 client.set_event_callback("shutdown", function()
@@ -1563,7 +1737,7 @@ end)
 
 -- ================= RANDOM CLANTAG =================
 local clantag_sec = misc_tab:new_section("Random Clantag", "Left")
-local default_text = "rndm lua beta "
+local default_text = "rndm lua"
 local text_box = clantag_sec:new_textbox("Clantag Text", "Enter text", default_text)
 local speed_slider = clantag_sec:new_slider("Cooldown (s)", 0.01, 0.5, 0.30, 2, "s")
 
@@ -2336,6 +2510,9 @@ local rt = {
     brute_stage = 0, brute_inverted = false, brute_yaw_offset = 0, brute_expire_tick = 0
 }
 
+local fs_side = nil
+local fs_next_update = 0
+
 -- Helper Functions
 local function calc_duration(base_ticks, randomize_ticks)
     local b = math.max(1, base_ticks)
@@ -2366,71 +2543,84 @@ end
 
 local function calculate_auto_inverter(lp)
     local cam_yaw = get_camera_yaw()
-    local my_pos = entity.get_player_hitbox_position(lp, "head") or entity.get_player_position(lp)
-    if not my_pos then return nil end
+    local head_pos = entity.get_player_hitbox_position(lp, "head")
+    local base_pos = entity.get_player_position(lp) or head_pos
+    if not base_pos then return nil end
 
-    local wall_checked, wall_side = pcall(function()
+    -- Custom freestanding: score actual cover around the head and upper torso.
+    -- Several short angular probes avoid choosing a side from one misleading ray.
+    local ok, selected = pcall(function()
         if not workspace or not workspace.Raycast then return nil end
         local rad = math.rad(cam_yaw)
-        local right_dir = Vector3.new(math.cos(rad), 0, -math.sin(rad))
-        local left_dir = -right_dir
-        local max_dist = 60
-        local hit_r, hit_l = nil, nil
-        
-        pcall(function()
-            local ray_params = get_safe_raycast_params()
-            if ray_params then
-                pcall(function()
-                    if RaycastFilterType and RaycastFilterType.Exclude then ray_params.FilterType = RaycastFilterType.Exclude
-                    elseif Enum and Enum.RaycastFilterType and Enum.RaycastFilterType.Exclude then ray_params.FilterType = Enum.RaycastFilterType.Exclude end
-                    local char = lp.Character or (typeof(lp) == "Instance" and lp)
-                    if char then ray_params.FilterDescendantsInstances = { char } end
-                end)
-                hit_r = workspace:Raycast(my_pos, right_dir * max_dist, ray_params)
-                hit_l = workspace:Raycast(my_pos, left_dir * max_dist, ray_params)
-            else
-                hit_r = workspace:Raycast(my_pos, right_dir * max_dist)
-                hit_l = workspace:Raycast(my_pos, left_dir * max_dist)
+        local right = Vector3.new(math.cos(rad), 0, -math.sin(rad))
+        local forward = Vector3.new(-math.sin(rad), 0, -math.cos(rad))
+        local origins = {}
+        if head_pos then table.insert(origins, head_pos) end
+        table.insert(origins, base_pos + Vector3.new(0, 2.1, 0))
+        local offsets = { -0.45, -0.22, 0, 0.22, 0.45 }
+        local max_dist = 42
+        local scores = { left = 0, right = 0 }
+        local ray_params = get_safe_raycast_params()
+        if ray_params then
+            pcall(function()
+                if RaycastFilterType and RaycastFilterType.Exclude then
+                    ray_params.FilterType = RaycastFilterType.Exclude
+                elseif Enum and Enum.RaycastFilterType then
+                    ray_params.FilterType = Enum.RaycastFilterType.Exclude
+                end
+                local char = lp.Character or (typeof(lp) == "Instance" and lp)
+                if char then ray_params.FilterDescendantsInstances = { char } end
+            end)
+        end
+        local function cast(origin, direction)
+            if ray_params then return workspace:Raycast(origin, direction * max_dist, ray_params) end
+            return workspace:Raycast(origin, direction * max_dist)
+        end
+        for _, origin in ipairs(origins) do
+            for _, offset in ipairs(offsets) do
+                local dir = (right * offset + forward * math.sqrt(1 - offset * offset)).Unit
+                local hit_r = cast(origin, dir)
+                local hit_l = cast(origin, -dir)
+                local dr = hit_r and hit_r.Distance or max_dist
+                local dl = hit_l and hit_l.Distance or max_dist
+                -- A nearby wall is useful only when the ray actually hits a mostly vertical surface.
+                local function cover(hit, dist)
+                    if not hit or not hit.Normal then return 0 end
+                    local horizontal = hit.Normal.X * hit.Normal.X + hit.Normal.Z * hit.Normal.Z
+                    if horizontal < 0.25 then return 0 end
+                    return math.max(0, max_dist - dist) * horizontal
+                end
+                scores.right = scores.right + cover(hit_r, dr)
+                scores.left = scores.left + cover(hit_l, dl)
             end
-        end)
-        
-        local dist_r = hit_r and (hit_r.Position - my_pos).Magnitude or max_dist
-        local dist_l = hit_l and (hit_l.Position - my_pos).Magnitude or max_dist
-        if math.abs(dist_r - dist_l) > 3 then return (dist_l < dist_r) end
-        return nil
+        end
+        local delta = scores.left - scores.right
+        if math.abs(delta) < 2.5 then return nil end
+        return delta > 0
     end)
+    if ok and selected ~= nil then return selected end
 
-    if wall_checked and wall_side ~= nil then return wall_side end
-
+    -- No useful wall signal: keep the original enemy-relative fallback.
     local enemies = entity.get_enemies()
     if enemies and #enemies > 0 then
-        local closest_pos = nil
-        local closest_dist = 999999
+        local closest_pos, closest_dist = nil, math.huge
         for _, enemy in ipairs(enemies) do
             if entity.is_alive(enemy) then
                 local e_pos = entity.get_player_position(enemy) or entity.get_player_hitbox_position(enemy, "head")
                 if e_pos then
-                    local d = (e_pos - my_pos).Magnitude
-                    if d < closest_dist then
-                        closest_dist = d
-                        closest_pos = e_pos
-                    end
+                    local d = (e_pos - base_pos).Magnitude
+                    if d < closest_dist then closest_dist, closest_pos = d, e_pos end
                 end
             end
         end
         if closest_pos then
-            local delta = closest_pos - my_pos
-            local enemy_yaw = math.deg(math.atan2(-delta.X, -delta.Z))
-            local diff = (enemy_yaw - cam_yaw + 180) % 360 - 180
-            return (diff > 0)
+            local to_enemy = closest_pos - base_pos
+            local right = Vector3.new(math.cos(math.rad(cam_yaw)), 0, -math.sin(math.rad(cam_yaw)))
+            return to_enemy:Dot(right) < 0
         end
     end
     return nil
 end
-
-local last_local_health = nil
-local last_brute_trigger_tick = 0
-
 local function trigger_anti_bruteforce(tick, reason)
     if not cfg.enabled:get() or not cfg.brute_enable:get() then return false end
     if tick - last_brute_trigger_tick < 4 then return false end
@@ -2595,7 +2785,16 @@ local function apply_aa(tick)
         if b_mode == "Yaw Phase" or b_mode == "Full Invert" then brute_yaw = rt.brute_yaw_offset or 0 end
     end
 
+    if not ext_sync_fs:get() then fs_side = nil end
     local active_side = cfg.inverter:get()
+    -- Custom freestanding: sample wall cover on both sides, then hold the safer side
+    -- for a configurable interval to avoid rapid side changes/head peeking.
+    if ext_sync_fs:get() and lp and entity.is_alive(lp) and tick >= fs_next_update then
+        local detected = calculate_auto_inverter(lp)
+        if detected ~= nil then fs_side = detected end
+        fs_next_update = tick + math.max(2, ext_fs_hold:get())
+    end
+    if ext_sync_fs:get() and fs_side ~= nil then active_side = fs_side end
     
     if cfg.brute_enable:get() and rt.brute_inverted then
         local b_mode = cfg.brute_mode:get()
@@ -2605,7 +2804,11 @@ local function apply_aa(tick)
         end
     end
 
-    local final_yaw = rt.cached_yaw + (rt.cached_mod_val or 0) + brute_yaw
+    local fs_yaw_bias = 0
+    if ext_sync_fs:get() and fs_side ~= nil then
+        fs_yaw_bias = (fs_side and 1 or -1) * ext_fs_yaw:get()
+    end
+    local final_yaw = rt.cached_yaw + (rt.cached_mod_val or 0) + brute_yaw + fs_yaw_bias
     final_yaw = (final_yaw + 180) % 360 - 180
     aa.override_yaw(final_yaw, base)
     aa.override_yaw_modifier("Disabled")
@@ -2846,6 +3049,9 @@ client.set_event_callback("shutdown", function()
     pcall(function() aa.reset() end)
 end)
 end) -- end delayed Vortex initialization (keeps vtab/cfg in scope)
+
+
+
 
 
 
