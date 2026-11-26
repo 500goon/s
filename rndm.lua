@@ -1728,9 +1728,10 @@ local clantag_sec = misc_tab:new_section("Random Clantag", "Left")
 local default_text = "rndm lua"
 local clantag_presets = {
     ["rndm lua"] = "rndm lua",
-    ["overtonight"] = "overtonight"
+    ["overtonight"] = "overtonight",
+    ["meow :3"] = "meow :3"
 }
-local clantag_preset_picker = clantag_sec:new_combobox("Clantag Preset", {"rndm lua", "overtonight"}, "rndm lua")
+local clantag_preset_picker = clantag_sec:new_combobox("Clantag Preset", {"rndm lua", "overtonight", "meow :3"}, "rndm lua")
 local text_box = clantag_sec:new_textbox("Clantag Text", "Enter text", default_text)
 local speed_slider = clantag_sec:new_slider("Typing Speed (s)", 0.01, 0.30, 0.30, 2, "s")
 local delete_slider = clantag_sec:new_slider("Deleting Speed (s)", 0.01, 0.30, 0.15, 2, "s")
@@ -2508,9 +2509,9 @@ local sec_state = vtab:new_section("Anti Aim", "Left")
 cfg.enabled = sec_state:new_toggle("Enable Stand AA (Priority)", true)
 cfg.pitch_mode = sec_state:new_combobox("Pitch Mode", PITCH_MODES, "Flick")
 cfg.pitch_custom = sec_state:new_slider("Pitch Value", -89, 89, -89, 0, "°")
-cfg.pitch_delay = sec_state:new_slider("Pitch Delay", 1, 32, 3, 0, "t")
+cfg.pitch_delay = sec_state:new_slider("Pitch Delay", 1, 32, 32, 0, "t")
 cfg.pitch_randomize = sec_state:new_slider("Pitch Delay Randomize", 0, 16, 0, 0, "t")
-cfg.pitch_hold1 = sec_state:new_slider("Pitch Angle 1 Hold", 1, 32, 1, 0, "t")
+cfg.pitch_hold1 = sec_state:new_slider("Pitch Angle 1 Hold", 0.5, 32, 0.5, 0, "t")
 cfg.pitch_hold2 = sec_state:new_slider("Pitch Angle 2 Hold", 1, 32, 1, 0, "t")
 
 cfg.yaw_base = sec_state:new_combobox("Yaw Base", { "Camera", "World" }, "Camera")
@@ -2988,7 +2989,6 @@ client.set_event_callback("shutdown", function()
     pcall(function() aa.reset() end)
 end)
 end) -- end delayed Vortex initialization (keeps vtab/cfg in scope)
-
 
 
 
