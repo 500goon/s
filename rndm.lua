@@ -2,7 +2,7 @@
 
 
 
--- meow :3 for penablox recode on roblox
+-- meow :3
 
 
 
@@ -1107,6 +1107,7 @@ local S = { rng = 123456789, side = false, burst_left = 0, last_flip = 0, force_
 local vortex_stats = { shots_fired = 0, hits = 0, misses = 0, res_hits = 0, per_weapon = {}, miss_reasons = {}, spread_misses = 0, occ_misses = 0, death_local_misses = 0, death_target_misses = 0 }
 local hc_active, last_hc = false, nil
 local cfg = {} -- Stand AA config, shared with Vortex priority gate
+local LOCAL_ANTIAIM_ENABLED = false -- Global kill switch: keep every local AA override disabled.
 
 -- ================= VORTEX UI =================
 local vtab     = menu.new_tab("anti aim", "rbxassetid://10734975692")
@@ -1117,7 +1118,7 @@ local vhud_sec = vtab:new_section("HUD", "Right")
 local ext_sec  = vtab:new_section("Extras", "Right")
 local brk_sec  = vtab:new_section("Breaker & Anti-Solver", "Right")
 
-local inv_on        = inv_sec:new_toggle("Enable Inverter Spam", true) 
+local inv_on        = inv_sec:new_toggle("Enable Inverter Spam", false) 
 local inv_mode      = inv_sec:new_combobox("Mode", {"Passive","Reactive","Burst","Adaptive"}, "Adaptive")
 local inv_pass_rate = inv_sec:new_slider("Passive flip rate", 1, 20, 3, 0, "t")
 local inv_burst_len = inv_sec:new_slider("Burst length", 2, 32, 14, 0, "t")
@@ -1125,7 +1126,7 @@ local inv_idle_rate = inv_sec:new_slider("Adaptive idle rate", 1, 32, 8, 0, "t")
 local inv_force_key = inv_sec:new_keybind("Manual flip key", "Toggle", "F")
 
 -- [PEEKER CONFIG] Max desync, Asymmetric
-local dsy_on          = dsy_sec:new_toggle("Enable Desync Randomizer", true)
+local dsy_on          = dsy_sec:new_toggle("Enable Desync Randomizer", false)
 local dsy_mode        = dsy_sec:new_combobox("Apply mode", {"Explicit","Limits", "Asymmetric", "Opposite"}, "Asymmetric")
 local dsy_random_side = dsy_sec:new_toggle("Randomize side too", true)
 local dsy_min         = dsy_sec:new_slider("Min angle", 0, 86, 86, 0, "°")
@@ -1137,9 +1138,9 @@ local dsy_jit_mode    = dsy_sec:new_combobox("Jitter Type", {"Sine", "Skitter", 
 local dsy_jit_range   = dsy_sec:new_slider("Jitter range", 0, 40, 45, 0, "°")
 local dsy_jit_speed   = dsy_sec:new_slider("Jitter speed", 1, 16, 3, 0, "t")
 
-local brk_on   = brk_sec:new_toggle("Enable Resolver Breaker", true)
+local brk_on   = brk_sec:new_toggle("Enable Resolver Breaker", false)
 local brk_gap  = brk_sec:new_slider("Gap from brute angles", 8, 25, 20, 0, "°")
-local as_on    = brk_sec:new_toggle("Enable Anti-Solver", true)
+local as_on    = brk_sec:new_toggle("Enable Anti-Solver", false)
 local as_low   = brk_sec:new_slider("Decoy low desync", 0, 30, 12, 0, "°")
 local as_secs  = brk_sec:new_slider("Avoid hit angle for", 2, 30, 15, 0, " s")
 
@@ -1150,8 +1151,8 @@ local vhud_show_stats  = vhud_sec:new_toggle("Show stats", true)
 local vhud_show_misses = vhud_sec:new_toggle("Show miss breakdown", true)
 local vhud_show_wep    = vhud_sec:new_toggle("Show per-weapon hit%", true)
 
-local ext_air_aa       = ext_sec:new_toggle("Air AA", true)
-local ext_low_hp_aa    = ext_sec:new_toggle("Low HP AA", true)
+local ext_air_aa       = ext_sec:new_toggle("Air AA", false)
+local ext_low_hp_aa    = ext_sec:new_toggle("Low HP AA", false)
 
 -- =====================================================
 -- [BREAKER & ANTI-SOLVER LOGIC]
@@ -1202,6 +1203,7 @@ local better_view_transparency = better_view_sec:new_slider("Transparency", 0, 1
 local better_view_color = better_view_sec:new_colorpicker("ForceField Color", Color3.fromHex("#5200FF"))
 
 local better_view_last_run = 0
+local better_view_last_map = nil
 local function better_view_apply_style(obj, target_color, transparency)
     if obj:IsA("BasePart") then
         obj.Material = Enum.Material.ForceField
@@ -1264,14 +1266,16 @@ task.spawn(function()
     while not dead do
         if better_view_enabled:get() then
             local now = clock()
-            if now - better_view_last_run >= 50 then
+            local current_map = workspace:FindFirstChild("Map")
+            if current_map ~= better_view_last_map or now - better_view_last_run >= 1 then
+                better_view_last_map = current_map
                 better_view_last_run = now
                 pcall(better_view_refresh)
             end
         else
             better_view_last_run = 0
         end
-        task.wait(1)
+        task.wait(0.25)
     end
 end)
 -- ================= AVATAR SKIN CHANGER =================
@@ -1301,12 +1305,17 @@ local skin_cfg_box = skin_sec:new_textbox("Avatar CFG (JSON)", "Paste or edit av
 -- Presets are selected from the dropdown below. The Local preset is
 -- generated at load time from the executing player's own Roblox avatar.
 local avatar_preset_data = {
+    ["classic noob"] = [=[{"SwimAnimation":0,"Face":0,"ProportionScale":0,"username":"sdaaaaaaasf","ClimbAnimation":0,"FrontAccessory":"","FaceAccessory":"","RightArmColor":[0.5058823823928833,0.5058823823928833,0.5058823823928833],"HairAccessory":"","RightArm":0,"Head":0,"FallAnimation":0,"TorsoColor":[0.5058823823928833,0.5058823823928833,0.5058823823928833],"DepthScale":1,"LeftArm":0,"HeightScale":1,"LeftLeg":0,"RightLegColor":[0.5058823823928833,0.5058823823928833,0.5058823823928833],"LeftLegColor":[0.5058823823928833,0.5058823823928833,0.5058823823928833],"WidthScale":1,"BodyTypeScale":0,"BackAccessory":"","LeftArmColor":[0.5058823823928833,0.5058823823928833,0.5058823823928833],"GraphicTShirt":0,"accessories":[{"IsLayered":false,"AccessoryType":"Hat","AssetId":5703665149}],"HeadColor":[0.5058823823928833,0.5058823823928833,0.5058823823928833],"WalkAnimation":0,"HatAccessory":"5703665149","RunAnimation":0,"JumpAnimation":0,"ShouldersAccessory":"","Torso":0,"NeckAccessory":"","userId":12066577198,"IdleAnimation":0,"Shirt":82515121207791,"HeadScale":1,"Pants":81482965904268,"RightLeg":0,"WaistAccessory":""}]=],
+    ["job"] = [=[{"SwimAnimation":0,"Face":0,"ProportionScale":0.20000000298023225,"username":"sdaaaaaaasf","ClimbAnimation":0,"FrontAccessory":"","FaceAccessory":"92073781907156","RightArmColor":[0.9764705896377564,0.9764705896377564,0.9764705896377564],"HairAccessory":"","RightArm":0,"Head":0,"FallAnimation":0,"TorsoColor":[0.9764705896377564,0.9764705896377564,0.9764705896377564],"DepthScale":0.949999988079071,"LeftArm":0,"HeightScale":0.8999999761581421,"LeftLeg":0,"RightLegColor":[0.9764705896377564,0.9764705896377564,0.9764705896377564],"LeftLegColor":[0.9764705896377564,0.9764705896377564,0.9764705896377564],"WidthScale":0.8999999761581421,"BodyTypeScale":0.5,"BackAccessory":"","LeftArmColor":[0.9764705896377564,0.9764705896377564,0.9764705896377564],"GraphicTShirt":0,"accessories":[{"IsLayered":false,"AccessoryType":"Face","AssetId":92073781907156}],"HeadColor":[0.9764705896377564,0.9764705896377564,0.9764705896377564],"WalkAnimation":0,"HatAccessory":"","RunAnimation":0,"JumpAnimation":0,"ShouldersAccessory":"","Torso":0,"NeckAccessory":"","userId":12066577198,"IdleAnimation":0,"Shirt":86784871506852,"HeadScale":0.949999988079071,"Pants":105703334970312,"RightLeg":0,"WaistAccessory":""}]=],
+    ["Pink"] = [=[{"SwimAnimation":119459207557848,"Face":0,"ProportionScale":0,"username":"sdaaaaaaasf","ClimbAnimation":100847329856258,"FrontAccessory":"","FaceAccessory":"","RightArmColor":[0,0,0],"HairAccessory":"128426333111348","RightArm":109212056131285,"Head":84595712136250,"FallAnimation":116630804595823,"TorsoColor":[0,0,0],"DepthScale":1,"LeftArm":135418661519228,"HeightScale":1,"LeftLeg":98949908575590,"RightLegColor":[1,1,1],"LeftLegColor":[0,0,0],"WidthScale":1,"BodyTypeScale":0,"BackAccessory":"83132050171168,71291246117995","LeftArmColor":[0,0,0],"GraphicTShirt":0,"accessories":[{"IsLayered":false,"AccessoryType":"Back","AssetId":83132050171168},{"IsLayered":false,"AccessoryType":"Back","AssetId":71291246117995},{"IsLayered":false,"AccessoryType":"Hair","AssetId":128426333111348},{"IsLayered":false,"AccessoryType":"Hat","AssetId":117475562207805},{"IsLayered":false,"AccessoryType":"Hat","AssetId":17225320544},{"IsLayered":false,"AccessoryType":"Hat","AssetId":91674562765889},{"IsLayered":false,"AccessoryType":"Hat","AssetId":133467730854076},{"IsLayered":false,"AccessoryType":"Neck","AssetId":106067586439689},{"IsLayered":false,"AccessoryType":"Neck","AssetId":6998001216},{"IsLayered":false,"AccessoryType":"Waist","AssetId":97152461151344}],"HeadColor":[0,0,0],"WalkAnimation":125685092185096,"HatAccessory":"117475562207805,17225320544,91674562765889,133467730854076","RunAnimation":127798602689390,"JumpAnimation":137416280852988,"ShouldersAccessory":"","Torso":48474356,"NeckAccessory":"106067586439689,6998001216","userId":12066577198,"IdleAnimation":0,"Shirt":125826853581300,"HeadScale":1,"Pants":104908372282584,"RightLeg":77155731237408,"WaistAccessory":"97152461151344"}]=],
+    ["Black"] = [=[{"SwimAnimation":0,"Face":0,"ProportionScale":0,"username":"sdaaaaaaasf","ClimbAnimation":0,"FrontAccessory":"","FaceAccessory":"17554904945,126331974594830","RightArmColor":[0,0,0],"HairAccessory":"16199722680,13840873383,17637705854","RightArm":0,"Head":0,"FallAnimation":0,"TorsoColor":[0,0,0],"DepthScale":0.800000011920929,"LeftArm":0,"HeightScale":1,"LeftLeg":0,"RightLegColor":[0,0,0],"LeftLegColor":[0,0,0],"WidthScale":0.800000011920929,"BodyTypeScale":0,"BackAccessory":"11704563407","LeftArmColor":[0,0,0],"GraphicTShirt":0,"accessories":[{"IsLayered":false,"AccessoryType":"Back","AssetId":11704563407},{"IsLayered":false,"AccessoryType":"Face","AssetId":17554904945},{"IsLayered":false,"AccessoryType":"Face","AssetId":126331974594830},{"IsLayered":false,"AccessoryType":"Hair","AssetId":16199722680},{"IsLayered":false,"AccessoryType":"Hair","AssetId":17637705854},{"IsLayered":false,"AccessoryType":"Hair","AssetId":13840873383},{"IsLayered":false,"AccessoryType":"Hat","AssetId":79542478825317},{"IsLayered":false,"AccessoryType":"Hat","AssetId":11492263747},{"IsLayered":false,"AccessoryType":"Neck","AssetId":118870553647469},{"IsLayered":false,"AccessoryType":"Neck","AssetId":107411267663272}],"HeadColor":[0,0,0],"WalkAnimation":0,"HatAccessory":"79542478825317,11492263747","RunAnimation":0,"JumpAnimation":0,"ShouldersAccessory":"","Torso":48474356,"NeckAccessory":"118870553647469,107411267663272","userId":12066577198,"IdleAnimation":0,"Shirt":15616500452,"HeadScale":1,"Pants":11787340410,"RightLeg":0,"WaistAccessory":""}]=],
+    ["Shark"] = [=[{"SwimAnimation":0,"Face":0,"ProportionScale":0,"username":"sdaaaaaaasf","ClimbAnimation":0,"FrontAccessory":"","FaceAccessory":"109055093266943","RightArmColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"HairAccessory":"13840873383,13779142261,17637705854,16199722680,15089852977","RightArm":0,"Head":0,"FallAnimation":0,"TorsoColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"DepthScale":0.800000011920929,"LeftArm":0,"HeightScale":1,"LeftLeg":0,"RightLegColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"LeftLegColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"WidthScale":0.800000011920929,"BodyTypeScale":0,"BackAccessory":"124619267017864","LeftArmColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"GraphicTShirt":0,"accessories":[{"IsLayered":false,"AccessoryType":"Back","AssetId":124619267017864},{"IsLayered":false,"AccessoryType":"Face","AssetId":109055093266943},{"IsLayered":false,"AccessoryType":"Hair","AssetId":13779142261},{"IsLayered":false,"AccessoryType":"Hair","AssetId":13840873383},{"IsLayered":false,"AccessoryType":"Hair","AssetId":17637705854},{"IsLayered":false,"AccessoryType":"Hair","AssetId":16199722680},{"IsLayered":false,"AccessoryType":"Hair","AssetId":15089852977},{"IsLayered":false,"AccessoryType":"Hat","AssetId":137519086744741},{"IsLayered":false,"AccessoryType":"Hat","AssetId":104122578333783}],"HeadColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"WalkAnimation":0,"HatAccessory":"137519086744741,104122578333783","RunAnimation":0,"JumpAnimation":0,"ShouldersAccessory":"","Torso":48474356,"NeckAccessory":"","userId":12066577198,"IdleAnimation":0,"Shirt":11818550339,"HeadScale":1,"Pants":8729847520,"RightLeg":0,"WaistAccessory":""}]=],
     ["aku_cursed0"] = [=[{"SwimAnimation":619537096,"Face":0,"ProportionScale":0,"username":"aku_cursed0","ClimbAnimation":619535091,"FrontAccessory":"16318705188","FaceAccessory":"17734433677","RightArmColor":[0.6313725709915161,0.7686274647712708,0.5490196347236633],"HairAccessory":"","RightArm":0,"Head":14488197116,"FallAnimation":619535616,"TorsoColor":[0.6313725709915161,0.7686274647712708,0.5490196347236633],"DepthScale":0.8500000238418579,"LeftArm":0,"HeightScale":0.949999988079071,"LeftLeg":115913397983281,"RightLegColor":[0.6313725709915161,0.7686274647712708,0.5490196347236633],"LeftLegColor":[0.6313725709915161,0.7686274647712708,0.5490196347236633],"WidthScale":0.699999988079071,"BodyTypeScale":0,"BackAccessory":"","LeftArmColor":[0.6313725709915161,0.7686274647712708,0.5490196347236633],"GraphicTShirt":0,"accessories":[{"IsLayered":false,"AccessoryType":"Shoulder","AssetId":3240543366},{"IsLayered":false,"AccessoryType":"Hat","AssetId":15200579454},{"AssetId":15728271241,"Order":13,"IsLayered":true,"Puffiness":1,"AccessoryType":"Hair"},{"IsLayered":false,"AccessoryType":"Front","AssetId":16318705188},{"IsLayered":false,"AccessoryType":"Face","AssetId":17734433677},{"AssetId":83894930070746,"Order":6,"IsLayered":true,"Puffiness":1,"AccessoryType":"Pants"}],"HeadColor":[0.6313725709915161,0.7686274647712708,0.5490196347236633],"WalkAnimation":619537468,"HatAccessory":"15200579454","RunAnimation":619536621,"JumpAnimation":619536283,"ShouldersAccessory":"3240543366","Torso":109135035435136,"NeckAccessory":"","userId":7839164878,"IdleAnimation":619535834,"Shirt":99765888867489,"HeadScale":0.949999988079071,"Pants":126426592205098,"RightLeg":100234186631845,"WaistAccessory":""}]=],
-    ["pretendlikeyouhearme"] = [=[{"SwimAnimation":2510240941,"Face":0,"ProportionScale":0.5,"username":"pretendlikeyouhearme","ClimbAnimation":5319931619,"FrontAccessory":"","FaceAccessory":"","RightArmColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"HairAccessory":"","RightArm":0,"Head":14488197116,"FallAnimation":658831500,"TorsoColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"DepthScale":1,"LeftArm":0,"HeightScale":0.949999988079071,"LeftLeg":0,"RightLegColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"LeftLegColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"WidthScale":1,"BodyTypeScale":0,"BackAccessory":"","LeftArmColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"GraphicTShirt":0,"accessories":[{"IsLayered":false,"AccessoryType":"Hat","AssetId":14998515172},{"AssetId":126447390530523,"Order":13,"IsLayered":true,"Puffiness":1,"AccessoryType":"Hair"}],"HeadColor":[0.9725490212440491,0.9725490212440491,0.9725490212440491],"WalkAnimation":619537468,"HatAccessory":"14998515172","RunAnimation":619536621,"JumpAnimation":658832070,"ShouldersAccessory":"","Torso":0,"NeckAccessory":"","userId":2565223507,"IdleAnimation":0,"Shirt":90963529088848,"HeadScale":1,"Pants":7668976302,"RightLeg":0,"WaistAccessory":""}]=],
-    ["Frost"] = [=[{"SwimAnimation":0,"Face":0,"ProportionScale":0,"username":"daxxonpawz","ClimbAnimation":0,"FrontAccessory":"","FaceAccessory":"","RightArmColor":[0.9490196108818054,0.9529411792755127,0.9529411792755127],"HairAccessory":"","RightArm":0,"Head":10638267973,"FallAnimation":0,"TorsoColor":[0.9490196108818054,0.9529411792755127,0.9529411792755127],"DepthScale":1,"LeftArm":0,"HeightScale":1,"LeftLeg":0,"RightLegColor":[0.4313725531107872,0.6000000238418579,0.7921568751335144],"LeftLegColor":[0.4313725531107872,0.6000000238418579,0.7921568751335144],"WidthScale":1,"BodyTypeScale":0,"BackAccessory":"","LeftArmColor":[0.9490196108818054,0.9529411792755127,0.9529411792755127],"GraphicTShirt":0,"accessories":[{"IsLayered":false,"AccessoryType":"Waist","AssetId":12899703533},{"IsLayered":false,"AccessoryType":"Hat","AssetId":13473801131}],"HeadColor":[0.9490196108818054,0.9529411792755127,0.9529411792755127],"WalkAnimation":0,"HatAccessory":"13473801131","RunAnimation":0,"JumpAnimation":0,"IdleAnimation":0,"Torso":48474356,"NeckAccessory":"","userId":11291493435,"LeftLeg":0,"Shirt":17551423754,"HeadScale":1,"Pants":17551407534,"RightLeg":0,"WaistAccessory":"12899703533"}]=],
+    ["pretendlikeyouhearme"] = [=[{"SwimAnimation":2510240941,"Face":0,"ProportionScale":0.5,"username":"pretendlikeyouhearme","ClimbAnimation":5319931619,"FrontAccessory":"","FaceAccessory":"11568711453","RightArmColor":[0.46666666865348816,0.4627451002597809,0.4745098054409027],"HairAccessory":"","RightArm":0,"Head":14488197116,"FallAnimation":754636589,"TorsoColor":[0.46666666865348816,0.4627451002597809,0.4745098054409027],"DepthScale":1,"LeftArm":0,"HeightScale":0.949999988079071,"LeftLeg":0,"RightLegColor":[0.46666666865348816,0.4627451002597809,0.4745098054409027],"LeftLegColor":[0.46666666865348816,0.4627451002597809,0.4745098054409027],"WidthScale":1,"BodyTypeScale":0,"BackAccessory":"","LeftArmColor":[0.46666666865348816,0.4627451002597809,0.4745098054409027],"GraphicTShirt":0,"accessories":[{"IsLayered":false,"AccessoryType":"Face","AssetId":11568711453},{"IsLayered":false,"AccessoryType":"Shoulder","AssetId":14928353936},{"AssetId":102659157896264,"Order":13,"IsLayered":true,"Puffiness":1,"AccessoryType":"Hair"},{"AssetId":129108086892367,"Order":13,"IsLayered":true,"Puffiness":1,"AccessoryType":"Hair"},{"IsLayered":false,"AccessoryType":"Hat","AssetId":138542382349571}],"HeadColor":[0.46666666865348816,0.4627451002597809,0.4745098054409027],"WalkAnimation":619537468,"HatAccessory":"138542382349571","RunAnimation":619536621,"JumpAnimation":1113752285,"ShouldersAccessory":"14928353936","Torso":0,"NeckAccessory":"","userId":2565223507,"IdleAnimation":0,"Shirt":103909513771828,"HeadScale":1,"Pants":96769873739323,"RightLeg":0,"WaistAccessory":""}]=],
+    ["Furry"] = [=[{"SwimAnimation":0,"Face":0,"ProportionScale":0,"username":"daxxonpawz","ClimbAnimation":0,"FrontAccessory":"","FaceAccessory":"","RightArmColor":[0.9490196108818054,0.9529411792755127,0.9529411792755127],"HairAccessory":"","RightArm":0,"Head":10638267973,"FallAnimation":0,"TorsoColor":[0.9490196108818054,0.9529411792755127,0.9529411792755127],"DepthScale":1,"LeftArm":0,"HeightScale":1,"LeftLeg":0,"RightLegColor":[0.4313725531107872,0.6000000238418579,0.7921568751335144],"LeftLegColor":[0.4313725531107872,0.6000000238418579,0.7921568751335144],"WidthScale":1,"BodyTypeScale":0,"BackAccessory":"","LeftArmColor":[0.9490196108818054,0.9529411792755127,0.9529411792755127],"GraphicTShirt":0,"accessories":[{"IsLayered":false,"AccessoryType":"Waist","AssetId":12899703533},{"IsLayered":false,"AccessoryType":"Hat","AssetId":13473801131}],"HeadColor":[0.9490196108818054,0.9529411792755127,0.9529411792755127],"WalkAnimation":0,"HatAccessory":"13473801131","RunAnimation":0,"JumpAnimation":0,"IdleAnimation":0,"Torso":48474356,"NeckAccessory":"","userId":11291493435,"LeftLeg":0,"Shirt":17551423754,"HeadScale":1,"Pants":17551407534,"RightLeg":0,"WaistAccessory":"12899703533"}]=],
 }
 -- A normal dropdown (like the weapon-group selector), not a separate toggle/button.
-local preset_picker = skin_sec:new_combobox("Avatar Presets", {"aku_cursed0", "pretendlikeyouhearme", "Frost", "local"}, "aku_cursed0")
+local preset_picker = skin_sec:new_combobox("Avatar Presets", {"Furry", "Pink", "Black", "Shark", "classic noob", "job", "aku_cursed0", "pretendlikeyouhearme", "local"}, "Furry")
 local function skin_load_selected_preset()
     local selected = preset_picker:get()
     local preset_json = avatar_preset_data[selected]
@@ -2192,7 +2201,7 @@ events.on_tick(function(tick_count)
     if poll_hit() and as_on:get() then as_burn_recent(now) end
 
     -- Stand AA has priority: suppress all Vortex AA overrides while it is enabled.
-    if not cfg.enabled or not cfg.enabled:get() then
+    if LOCAL_ANTIAIM_ENABLED and (not cfg.enabled or not cfg.enabled:get()) then
     -- Leave pitch control to the Stand AA builder below.
     -- Keep the existing Vortex fake-lag behavior without overriding pitch.
     pcall(function()
@@ -2506,8 +2515,8 @@ local DESYNC_MODES = {
 local sec_state = vtab:new_section("Anti Aim", "Left")
 
 -- UI Elements (Defaults set to your requested values)
-cfg.enabled = sec_state:new_toggle("Enable Stand AA (Priority)", true)
-cfg.pitch_mode = sec_state:new_combobox("Pitch Mode", PITCH_MODES, "Flick")
+cfg.enabled = sec_state:new_toggle("Enable Stand AA (Priority)", false)
+cfg.pitch_mode = sec_state:new_combobox("Pitch Mode", PITCH_MODES, "Disabled")
 cfg.pitch_custom = sec_state:new_slider("Pitch Value", -89, 89, -89, 0, "°")
 cfg.pitch_delay = sec_state:new_slider("Pitch Delay", 1, 32, 32, 0, "t")
 cfg.pitch_randomize = sec_state:new_slider("Pitch Delay Randomize", 0, 16, 0, 0, "t")
@@ -2966,6 +2975,7 @@ end
 -- 64 Hz Client Simulation Tick Hook
 events.on_tick(function(tick)
     if not cfg.enabled:get() then
+        pcall(function() aa.reset() end)
         return
     end
 
