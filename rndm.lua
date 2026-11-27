@@ -1741,6 +1741,7 @@ local clantag_presets = {
     ["meow :3"] = "meow :3"
 }
 local clantag_preset_picker = clantag_sec:new_combobox("Clantag Preset", {"rndm lua", "overtonight", "meow :3"}, "rndm lua")
+local dots_style_toggle = clantag_sec:new_toggle("Dots Style (off = Normal)", false)
 local text_box = clantag_sec:new_textbox("Clantag Text", "Enter text", default_text)
 local speed_slider = clantag_sec:new_slider("Typing Speed (s)", 0.01, 0.30, 0.30, 2, "s")
 local delete_slider = clantag_sec:new_slider("Deleting Speed (s)", 0.01, 0.30, 0.15, 2, "s")
@@ -1755,24 +1756,40 @@ local function apply_clantag(text)
 
     local frames = {}
     local length = #text
+    local use_dots_style = dots_style_toggle:get() == true
     local type_spd = tonumber(speed_slider:get()) or 0.30
     local del_spd = tonumber(delete_slider:get()) or 0.15
     local base_spd = math.max(0.01, math.min(type_spd, del_spd))
     local type_ratio = math.max(1, math.ceil(type_spd / base_spd))
     local del_ratio = math.max(1, math.ceil(del_spd / base_spd))
 
-    for i = 1, length do
-        local frame = text:sub(1, i)
-        for _ = 1, type_ratio do table.insert(frames, frame) end
+    if use_dots_style then
+        -- Keep the tag at a constant length: progressively mask trailing letters with dots.
+        for hidden = 0, length do
+            local frame = text:sub(1, length - hidden) .. string.rep(".", hidden)
+            for _ = 1, type_ratio do table.insert(frames, frame) end
+        end
+        for _ = 1, math.floor(tonumber(delay_slider:get()) or 5) do
+            table.insert(frames, string.rep(".", length))
+        end
+        for hidden = length - 1, 0, -1 do
+            local frame = text:sub(1, length - hidden) .. string.rep(".", hidden)
+            for _ = 1, del_ratio do table.insert(frames, frame) end
+        end
+    else
+        for i = 1, length do
+            local frame = text:sub(1, i)
+            for _ = 1, type_ratio do table.insert(frames, frame) end
+        end
+        for _ = 1, math.floor(tonumber(delay_slider:get()) or 5) do
+            table.insert(frames, text)
+        end
+        for i = length - 1, 1, -1 do
+            local frame = text:sub(1, i)
+            for _ = 1, del_ratio do table.insert(frames, frame) end
+        end
+        table.insert(frames, "")
     end
-    for _ = 1, math.floor(tonumber(delay_slider:get()) or 5) do
-        table.insert(frames, text)
-    end
-    for i = length - 1, 1, -1 do
-        local frame = text:sub(1, i)
-        for _ = 1, del_ratio do table.insert(frames, frame) end
-    end
-    table.insert(frames, "")
 
     local ok, err = pcall(function()
         clantag.set_frames(frames, base_spd)
@@ -1806,15 +1823,16 @@ text_box:set_callback(function(value)
     if value ~= nil then active_clantag_text = tostring(value) end
 end)
 
--- Poll the combobox every five seconds instead of relying on its callback.
+-- Poll the combobox every second instead of relying on its callback.
 -- Only restart the clantag when the selected preset actually changes.
 local last_clantag_selection = tostring(clantag_preset_picker:get() or "rndm lua")
+local last_dots_style = dots_style_toggle:get() == true
 local next_clantag_check = 0
 
 local function check_clantag_selection()
     local now = clock()
     if now < next_clantag_check then return end
-    next_clantag_check = now + 5
+    next_clantag_check = now + 1
 
     local ok, selected = pcall(function()
         return clantag_preset_picker:get()
@@ -1822,8 +1840,10 @@ local function check_clantag_selection()
     if not ok or selected == nil then return end
 
     selected = tostring(selected)
-    if selected ~= last_clantag_selection then
+    local dots_enabled = dots_style_toggle:get() == true
+    if selected ~= last_clantag_selection or dots_enabled ~= last_dots_style then
         last_clantag_selection = selected
+        last_dots_style = dots_enabled
         local selected_text = get_selected_clantag_text()
         if clantag_toggle:get() then
             apply_clantag(selected_text)
@@ -2999,7 +3019,6 @@ client.set_event_callback("shutdown", function()
     pcall(function() aa.reset() end)
 end)
 end) -- end delayed Vortex initialization (keeps vtab/cfg in scope)
-
 
 
 
