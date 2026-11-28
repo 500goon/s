@@ -1629,9 +1629,14 @@ local function skin_apply(force)
 end
 
 skin_enabled:set_callback(function(on)
-    if on then skin_apply() else skin_restore() end
+    if on then
+        skin_apply()
+    else
+        skin_restore()
+    end
 end)
--- Selecting a built-in preset applies it immediately; no extra load step.
+
+-- Keep preset application synchronous, matching the original first-person flow.
 preset_picker:set_callback(function()
     skin_load_selected_preset()
     pcall(function() skin_enabled:set(true) end)
