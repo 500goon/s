@@ -2,7 +2,7 @@
 
 
 
--- meow :3
+-- meow :3 good day 
 
 
 
@@ -1745,9 +1745,10 @@ local clantag_presets = {
     ["overtonight"] = "overtonight",
     ["meow :3"] = "meow :3"
 }
-local clantag_preset_picker = clantag_sec:new_combobox("Clantag Preset", {"rndm lua", "overtonight", "meow :3"}, "rndm lua")
+local clantag_preset_picker = clantag_sec:new_combobox("Clantag Preset", {"rndm lua", "overtonight", "meow :3", "Custom"}, "rndm lua")
 local dots_style_toggle = clantag_sec:new_toggle("Dots Style (off = Normal)", false)
-local text_box = clantag_sec:new_textbox("Clantag Text", "Enter text", default_text)
+-- The editor is only shown for the Custom preset; custom text is kept separately from presets.
+local text_box = clantag_sec:new_textbox("Clantag Text", "Enter custom text", "")
 local speed_slider = clantag_sec:new_slider("Typing Speed (s)", 0.01, 0.30, 0.30, 2, "s")
 local delete_slider = clantag_sec:new_slider("Deleting Speed (s)", 0.01, 0.30, 0.15, 2, "s")
 local delay_slider = clantag_sec:new_slider("End Hold (Frames)", 1, 20, 5, 0, "f")
@@ -1807,13 +1808,17 @@ local function get_selected_clantag_text()
     local preset_text = clantag_presets[selected]
     if preset_text then
         active_clantag_text = preset_text
-        pcall(function() text_box:set(preset_text) end)
         return preset_text
     end
     local custom = text_box:get()
     if custom == nil or tostring(custom) == "" then custom = default_text end
     active_clantag_text = tostring(custom)
     return active_clantag_text
+end
+
+local function update_custom_editor_visibility()
+    local is_custom = tostring(clantag_preset_picker:get() or "") == "Custom"
+    pcall(function() text_box:set_visible(is_custom) end)
 end
 
 local clantag_toggle = clantag_sec:new_toggle("Enable Custom Clantag", true, function(enabled)
@@ -1825,7 +1830,12 @@ local clantag_toggle = clantag_sec:new_toggle("Enable Custom Clantag", true, fun
 end)
 
 text_box:set_callback(function(value)
-    if value ~= nil then active_clantag_text = tostring(value) end
+    if value ~= nil then
+        active_clantag_text = tostring(value)
+        if tostring(clantag_preset_picker:get() or "") == "Custom" and clantag_toggle:get() then
+            apply_clantag(active_clantag_text)
+        end
+    end
 end)
 
 -- Poll the combobox every second instead of relying on its callback.
@@ -1846,6 +1856,7 @@ local function check_clantag_selection()
 
     selected = tostring(selected)
     local dots_enabled = dots_style_toggle:get() == true
+    update_custom_editor_visibility()
     if selected ~= last_clantag_selection or dots_enabled ~= last_dots_style then
         last_clantag_selection = selected
         last_dots_style = dots_enabled
@@ -1858,7 +1869,12 @@ end
 
 client.set_event_callback("paint", check_clantag_selection)
 
--- Initialize the editor and clantag from the current selection.
+-- Initialize visibility and clantag from the current selection.
+update_custom_editor_visibility()
+clantag_preset_picker:set_callback(function()
+    update_custom_editor_visibility()
+    if clantag_toggle:get() then apply_clantag(get_selected_clantag_text()) end
+end)
 get_selected_clantag_text()
 if clantag_toggle:get() then apply_clantag(active_clantag_text) end
 
